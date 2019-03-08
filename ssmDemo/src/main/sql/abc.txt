@@ -1,0 +1,115 @@
+<!-- 批量插入 -->
+	<insert  id="insertContentList" useGeneratedKeys="true" keyProperty="id">
+		<![CDATA[
+			insert into tableContent(pubId,integrant,ownContentName,dateLine,pubFieldContentName,suffix,modifyTime,deleteTime,compareType,pubContentIndex,multiple,isInput,pubFieldTitle) values
+			 <foreach collection="list" item="item" index="index" separator=",">  
+			(#{item.pubId},#{item.integrant},#{item.ownContentName},unix_timestamp(),#{item.pubFieldContentName},#{item.suffix},unix_timestamp(),#{item.deleteTime},#{item.compareType},#{item.pubContentIndex},#{item.multiple},#{item.isInput},#{item.pubFieldTitle})
+			</foreach>  
+		]]> 
+	</insert>
+
+
+	
+@ResponseBody    
+@RequestMapping(value = "/improtExcel", method = { RequestMethod.POST })    
+public JsonResult ImprotExcel(@RequestParam(value="uploadFile")MultipartFile file) {    
+    SysResources  obj = new SysResources ();    
+    try {    
+            
+        List<Map<String, Object>> list = ImportExcelUntil.importExcel(file, obj);    
+            
+        System.out.println(list);    
+    } catch (Exception e) {    
+        e.printStackTrace();    
+    }    
+        
+    //批量插入数据库    
+    JsonResult jr = JsonResult.newInstance();    
+    String ret = null;    
+    String ret = sysResourceService.insert(list);    
+    return ret == null ? jr.declareSuccess() : jr.declareFailure(ret);    
+}    
+
+package com.xiong.weixin.untils;    
+    
+import java.lang.reflect.Field;    
+import java.util.ArrayList;    
+import java.util.HashMap;    
+import java.util.List;    
+import java.util.Map;    
+    
+import org.apache.commons.lang3.reflect.FieldUtils;    
+import org.apache.poi.hssf.usermodel.HSSFCell;    
+import org.apache.poi.hssf.usermodel.HSSFRow;    
+import org.apache.poi.hssf.usermodel.HSSFSheet;    
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;    
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;    
+import org.springframework.web.multipart.MultipartFile;    
+/**  
+ *   
+ * @author XiongYC  
+ * @date 2017年11月2日  
+ *  
+ */    
+public class ImportExcelUntil{    
+    
+    /**  
+     * 拼装单个obj  
+     * @param obj  
+     * @param row  
+     * @return  
+     * @throws Exception  
+     */    
+    private  static  Map<String, Object>  dataObj(Object obj, HSSFRow row) throws Exception {    
+        Class<?> rowClazz= obj.getClass();        
+        Field[] fields = FieldUtils.getAllFields(rowClazz);    
+        if (fields == null || fields.length < 1) {    
+            return null;    
+        }    
+            
+        //容器    
+        Map<String, Object> map = new HashMap<String, Object>();    
+            
+        //注意excel表格字段顺序要和obj字段顺序对齐 （如果有多余字段请另作特殊下标对应处理）    
+        for (int j = 0; j < fields.length; j++) {    
+            map.put(fields[j].getName(), getVal(row.getCell(j)));    
+        }    
+        return map;     
+    }    
+        
+    public  static   List<Map<String, Object>> importExcel(MultipartFile file, Object obj) throws Exception {    
+            
+        //装载流    
+        POIFSFileSystem fs = new POIFSFileSystem(file.getInputStream());    
+        HSSFWorkbook hw= new HSSFWorkbook(fs);    
+            
+        //获取第一个sheet页    
+        HSSFSheet sheet = hw.getSheetAt(0);    
+            
+        //容器    
+        List<Map<String, Object>> ret = new ArrayList<Map<String, Object>>();    
+            
+        //遍历行 从下标第一行开始（去除标题）    
+        for (int i = 1; i < sheet.getLastRowNum(); i++) {    
+            HSSFRow row= sheet.getRow(i);    
+            if(row!=null){    
+                //装载obj    
+                 ret.add(dataObj(obj,row));    
+            }    
+        }    
+        return ret;    
+    }    
+        
+    /**  
+     * 处理val（暂时只处理string和number，可以自己添加自己需要的val类型）  
+     * @param hssfCell  
+     * @return  
+     */    
+    public static String getVal(HSSFCell hssfCell) {    
+        if (hssfCell.getCellType() == HSSFCell.CELL_TYPE_STRING) {    
+            return hssfCell.getStringCellValue();    
+        } else {    
+            return String.valueOf(hssfCell.getNumericCellValue());    
+        }    
+    }    
+}   
